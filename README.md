@@ -57,6 +57,8 @@ python -m pip install --upgrade pip
 pip install mlx numpy sentencepiece huggingface-hub datasets tqdm
 ```
 
+If you use Fish shell, activate the environment with `source .venv/bin/activate.fish` instead of `source .venv/bin/activate`.
+
 Download our cached version of FineWeb with the 1024-token vocabulary:
 
 ```bash
