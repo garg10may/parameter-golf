@@ -24,6 +24,7 @@ import sentencepiece as spm
 import torch
 import torch.distributed as dist
 import torch.nn.functional as F
+from experiment_tracking import SQLiteExperimentTracker, collect_hyperparameters
 from torch import Tensor, nn
 from torch.nn.parallel import DistributedDataParallel as DDP
 
@@ -49,6 +50,7 @@ class Hyperparameters:
     val_batch_size = int(os.environ.get("VAL_BATCH_SIZE", 524_288))
     val_loss_every = int(os.environ.get("VAL_LOSS_EVERY", 1000))
     train_log_every = int(os.environ.get("TRAIN_LOG_EVERY", 200))
+    fast_dev_run = bool(int(os.environ.get("FAST_DEV_RUN", "0")))
 
     # Training length.
     iterations = int(os.environ.get("ITERATIONS", 20000))
@@ -773,6 +775,15 @@ def main() -> None:
         os.makedirs("logs", exist_ok=True)
         logfile = f"logs/{args.run_id}.txt"
         print(logfile)
+        tracker: SQLiteExperimentTracker | None = SQLiteExperimentTracker.from_env(
+            script_name="train_gpt.py",
+            backend="cuda",
+            run_id=args.run_id,
+            log_path=logfile,
+        )
+        tracker.start_run()
+    else:
+        tracker = None
 
     def log0(msg: str, console: bool = True) -> None:
         if not master_process:
@@ -782,6 +793,11 @@ def main() -> None:
         if logfile is not None:
             with open(logfile, "a", encoding="utf-8") as f:
                 print(msg, file=f)
+
+    def log_section(title: str, rows: list[tuple[str, object]]) -> None:
+        log0(f"[{title}]")
+        for key, value in rows:
+            log0(f"  {key}: {value}")
 
     log0(code, console=False)
     log0("=" * 100, console=False)
@@ -812,12 +828,40 @@ def main() -> None:
     dataset_dir = Path(args.data_path).resolve()
     actual_train_files = len(list(dataset_dir.glob("fineweb_train_*.bin")))
     val_tokens = load_validation_tokens(args.val_files, args.train_seq_len)
+    if tracker is not None:
+        tracker.log_params(collect_hyperparameters(args))
+        tracker.log_params(
+            {
+                "dataset_name": dataset_dir.name,
+                "actual_train_shards": actual_train_files,
+                "world_size": world_size,
+                "grad_accum_steps": grad_accum_steps,
+            }
+        )
     base_bytes_lut, has_leading_space_lut, is_boundary_token_lut = build_sentencepiece_luts(
         sp, args.vocab_size, device
     )
-    log0(f"val_bpb:enabled tokenizer_kind=sentencepiece tokenizer_path={args.tokenizer_path}")
-    log0(f"train_loader:dataset:{dataset_dir.name} train_shards:{actual_train_files}")
-    log0(f"val_loader:shards pattern={args.val_files} tokens:{val_tokens.numel() - 1}")
+    log_section(
+        "Run",
+        [
+            ("run_id", args.run_id),
+            ("pytorch_version", torch.__version__),
+            ("world_size", world_size),
+            ("fast_dev_run", args.fast_dev_run),
+            ("device", device),
+        ],
+    )
+    log_section(
+        "Data",
+        [
+            ("dataset", dataset_dir.name),
+            ("train_shards", actual_train_files),
+            ("train_shards_pattern", args.train_files),
+            ("val_shards_pattern", args.val_files),
+            ("val_tokens", val_tokens.numel() - 1),
+            ("tokenizer_path", args.tokenizer_path),
+        ],
+    )
 
     # -----------------------------
     # MODEL + OPTIMIZER SETUP
@@ -893,19 +937,48 @@ def main() -> None:
         optimizers.insert(1, optimizer_head)
 
     n_params = sum(p.numel() for p in base_model.parameters())
-    log0(f"model_params:{n_params}")
-    log0(f"world_size:{world_size} grad_accum_steps:{grad_accum_steps}")
-    log0("sdp_backends:cudnn=False flash=True mem_efficient=False math=False")
-    log0(f"attention_mode:gqa num_heads:{args.num_heads} num_kv_heads:{args.num_kv_heads}")
-    log0(
-        f"tie_embeddings:{args.tie_embeddings} embed_lr:{token_lr} "
-        f"head_lr:{args.head_lr if base_model.lm_head is not None else 0.0} "
-        f"matrix_lr:{args.matrix_lr} scalar_lr:{args.scalar_lr}"
+    log_section(
+        "Model",
+        [
+            ("params", n_params),
+            ("vocab_size", args.vocab_size),
+            ("layers", args.num_layers),
+            ("dim", args.model_dim),
+            ("heads", args.num_heads),
+            ("kv_heads", args.num_kv_heads),
+            ("seq_len", args.train_seq_len),
+            ("tie_embeddings", args.tie_embeddings),
+            ("attention_mode", "gqa"),
+            ("sdp_backends", "cudnn=False flash=True mem_efficient=False math=False"),
+        ],
     )
-    log0(
-        f"train_batch_tokens:{args.train_batch_tokens} train_seq_len:{args.train_seq_len} "
-        f"iterations:{args.iterations} warmup_steps:{args.warmup_steps} "
-        f"max_wallclock_seconds:{args.max_wallclock_seconds:.3f}"
+    log_section(
+        "Train",
+        [
+            ("grad_accum_steps", grad_accum_steps),
+            ("train_batch_tokens", args.train_batch_tokens),
+            ("iterations", args.iterations),
+            ("warmup_steps", args.warmup_steps),
+            ("max_wallclock_seconds", f"{args.max_wallclock_seconds:.3f}"),
+        ],
+    )
+    log_section(
+        "Optimizer",
+        [
+            ("embed_lr", token_lr),
+            ("head_lr", args.head_lr if base_model.lm_head is not None else 0.0),
+            ("matrix_lr", args.matrix_lr),
+            ("scalar_lr", args.scalar_lr),
+            ("muon_momentum", args.muon_momentum),
+            ("muon_steps", args.muon_backend_steps),
+        ],
+    )
+    log_section(
+        "Validation",
+        [
+            ("metric", "val_loss + val_bpb"),
+            ("tokenizer_kind", "sentencepiece"),
+        ],
     )
     log0(f"seed:{args.seed}")
 
@@ -952,6 +1025,8 @@ def main() -> None:
             zero_grad_all()
             if args.warmup_steps <= 20 or (warmup_step + 1) % 10 == 0 or warmup_step + 1 == args.warmup_steps:
                 log0(f"warmup_step:{warmup_step + 1}/{args.warmup_steps}")
+        if tracker is not None:
+            tracker.log_event(name="warmup_complete", message=f"warmup_steps={args.warmup_steps}")
         base_model.load_state_dict(initial_model_state, strict=True)
         for opt, state in zip(optimizers, initial_optimizer_states, strict=True):
             opt.load_state_dict(state)
@@ -973,7 +1048,9 @@ def main() -> None:
     while True:
         last_step = step == args.iterations or (stop_after_step is not None and step >= stop_after_step)
 
-        should_validate = last_step or (args.val_loss_every > 0 and step % args.val_loss_every == 0)
+        should_validate = (not last_step and args.val_loss_every > 0 and step % args.val_loss_every == 0) or (
+            last_step and not args.fast_dev_run
+        )
         if should_validate:
             torch.cuda.synchronize()
             training_time_ms += 1000.0 * (time.perf_counter() - t0)
@@ -993,6 +1070,10 @@ def main() -> None:
                 f"step:{step}/{args.iterations} val_loss:{val_loss:.4f} val_bpb:{val_bpb:.4f} "
                 f"train_time:{training_time_ms:.0f}ms step_avg:{training_time_ms / max(step, 1):.2f}ms"
             )
+            if tracker is not None:
+                tracker.log_metric(phase="val", name="val_loss", value=val_loss, step=step)
+                tracker.log_metric(phase="val", name="val_bpb", value=val_bpb, step=step)
+                tracker.log_metric(phase="val", name="train_time_ms", value=training_time_ms, step=step)
             torch.cuda.synchronize()
             t0 = time.perf_counter()
 
@@ -1044,6 +1125,9 @@ def main() -> None:
                 f"step:{step}/{args.iterations} train_loss:{train_loss.item():.4f} "
                 f"train_time:{approx_training_time_ms:.0f}ms step_avg:{approx_training_time_ms / step:.2f}ms"
             )
+            if tracker is not None:
+                tracker.log_metric(phase="train", name="train_loss", value=float(train_loss.item()), step=step)
+                tracker.log_metric(phase="train", name="train_time_ms", value=approx_training_time_ms, step=step)
 
         # Needed to sync whether we've reached the wallclock cap.
         reached_cap = max_wallclock_ms is not None and approx_training_time_ms >= max_wallclock_ms
@@ -1058,6 +1142,28 @@ def main() -> None:
         f"peak memory allocated: {torch.cuda.max_memory_allocated() // 1024 // 1024} MiB "
         f"reserved: {torch.cuda.max_memory_reserved() // 1024 // 1024} MiB"
     )
+    if tracker is not None:
+        tracker.log_metric(
+            phase="system",
+            name="peak_memory_allocated_mib",
+            value=torch.cuda.max_memory_allocated() // 1024 // 1024,
+            step=step,
+        )
+        tracker.log_metric(
+            phase="system",
+            name="peak_memory_reserved_mib",
+            value=torch.cuda.max_memory_reserved() // 1024 // 1024,
+            step=step,
+        )
+
+    if args.fast_dev_run:
+        log0("fast_dev_run:skipping final validation, serialization, and quantized roundtrip eval")
+        if tracker is not None:
+            tracker.finish(status="completed", notes="fast_dev_run")
+            tracker.close()
+        if distributed:
+            dist.destroy_process_group()
+        return
 
     # -----------------------------
     # SERIALIZATION + ROUNDTRIP VALIDATION
@@ -1072,6 +1178,8 @@ def main() -> None:
         log0(f"Serialized model: {model_bytes} bytes")
         log0(f"Code size: {code_bytes} bytes")
         log0(f"Total submission size: {model_bytes + code_bytes} bytes")
+        if tracker is not None:
+            tracker.log_artifact(name="final_model_pt", num_bytes=model_bytes, metadata={"code_bytes": code_bytes})
 
     quant_obj, quant_stats = quantize_state_dict_int8(base_model.state_dict())
     quant_buf = io.BytesIO()
@@ -1090,6 +1198,17 @@ def main() -> None:
             f"(payload:{quant_stats['int8_payload_bytes']} raw_torch:{quant_raw_bytes} payload_ratio:{ratio:.2f}x)"
         )
         log0(f"Total submission size int8+zlib: {quant_file_bytes + code_bytes} bytes")
+        if tracker is not None:
+            tracker.log_artifact(
+                name="final_model_int8_ptz",
+                num_bytes=quant_file_bytes,
+                metadata={
+                    "payload_bytes": quant_stats["int8_payload_bytes"],
+                    "raw_torch_bytes": quant_raw_bytes,
+                    "payload_ratio": ratio,
+                    "code_bytes": code_bytes,
+                },
+            )
 
     if distributed:
         dist.barrier()
@@ -1112,11 +1231,18 @@ def main() -> None:
         is_boundary_token_lut,
     )
     torch.cuda.synchronize()
+    q_eval_ms = 1000.0 * (time.perf_counter() - t_qeval)
     log0(
         f"final_int8_zlib_roundtrip val_loss:{q_val_loss:.4f} val_bpb:{q_val_bpb:.4f} "
-        f"eval_time:{1000.0 * (time.perf_counter() - t_qeval):.0f}ms"
+        f"eval_time:{q_eval_ms:.0f}ms"
     )
     log0(f"final_int8_zlib_roundtrip_exact val_loss:{q_val_loss:.8f} val_bpb:{q_val_bpb:.8f}")
+    if tracker is not None:
+        tracker.log_metric(phase="roundtrip", name="val_loss", value=q_val_loss, step=step)
+        tracker.log_metric(phase="roundtrip", name="val_bpb", value=q_val_bpb, step=step)
+        tracker.log_metric(phase="roundtrip", name="eval_time_ms", value=q_eval_ms, step=step)
+        tracker.finish(status="completed")
+        tracker.close()
 
     if distributed:
         dist.destroy_process_group()

@@ -24,6 +24,7 @@ import sentencepiece as spm
 import mlx.core as mx
 import mlx.nn as nn
 import mlx.optimizers as optim
+from experiment_tracking import SQLiteExperimentTracker, collect_hyperparameters
 from mlx.utils import tree_flatten, tree_unflatten
 
 # ==============================================================================
@@ -53,6 +54,7 @@ class Hyperparameters:
     # Validation always uses the full fineweb_val split.
     val_batch_size: int = int(os.environ.get("VAL_BATCH_SIZE", 524_288))
     train_log_every: int = int(os.environ.get("TRAIN_LOG_EVERY", 200))
+    fast_dev_run: bool = bool(int(os.environ.get("FAST_DEV_RUN", "0")))
     train_batch_tokens: int = int(os.environ.get("TRAIN_BATCH_TOKENS", 524_288))
     grad_accum_steps: int = int(os.environ.get("GRAD_ACCUM_STEPS", 8))
     train_seq_len: int = int(os.environ.get("TRAIN_SEQ_LEN", os.environ.get("TRAIN_MAX_SEQ_LEN", 1024)))
@@ -842,12 +844,24 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     logfile = out_dir / f"{args.run_id}.txt"
     print(logfile)
+    tracker = SQLiteExperimentTracker.from_env(
+        script_name="train_gpt_mlx.py",
+        backend="mlx",
+        run_id=args.run_id,
+        log_path=str(logfile),
+    )
+    tracker.start_run()
 
     def log(msg: str, console: bool = True) -> None:
         if console:
             print(msg)
         with logfile.open("a", encoding="utf-8") as f:
             print(msg, file=f)
+
+    def log_section(title: str, rows: list[tuple[str, object]]) -> None:
+        log(f"[{title}]")
+        for key, value in rows:
+            log(f"  {key}: {value}")
 
     code = Path(__file__).read_text(encoding="utf-8")
     log(code, console=False)
@@ -868,6 +882,14 @@ def main() -> None:
     dataset_name, actual_train_files, expected_train_files = validate_dataset_tokenizer_pair(
         args.data_path,
         args.tokenizer_path,
+    )
+    tracker.log_params(collect_hyperparameters(args))
+    tracker.log_params(
+        {
+            "dataset_name": dataset_name,
+            "actual_train_shards": actual_train_files,
+            "expected_train_shards": expected_train_files,
+        }
     )
     val_tokens = load_validation_tokens(args.val_files, args.train_seq_len)
 
@@ -916,45 +938,83 @@ def main() -> None:
 
     # Print config once so logs are self-describing.
     n_params = sum(int(np.prod(p.shape)) for _, p in tree_flatten(model.parameters()))
-    log(f"run_id:{args.run_id}")
-    log(f"mlx_version:{mx.__version__}")
-    log(f"train_loader:shards pattern={args.train_files}")
-    log(f"val_loader:shards pattern={args.val_files} tokens:{val_tokens.size - 1}")
+    log_section(
+        "Run",
+        [
+            ("run_id", args.run_id),
+            ("mlx_version", mx.__version__),
+            ("fast_dev_run", args.fast_dev_run),
+            ("compile", True),
+        ],
+    )
+    log_section(
+        "Data",
+        [
+            ("train_shards_pattern", args.train_files),
+            ("val_shards_pattern", args.val_files),
+            ("val_tokens", val_tokens.size - 1),
+            ("tokenizer_path", args.tokenizer_path),
+        ],
+    )
     if expected_train_files is None:
-        log(f"train_loader:dataset:{dataset_name} train_shards:{actual_train_files}")
+        log(f"  dataset: {dataset_name} ({actual_train_files} train shards)")
     elif actual_train_files < expected_train_files:
         log(
-            f"WARNING: train_loader:subset dataset:{dataset_name} "
-            f"train_shards:{actual_train_files}/{expected_train_files} "
+            f"  warning: dataset={dataset_name} train_shards={actual_train_files}/{expected_train_files} "
             f"new epochs will arrive sooner than the full dataset"
         )
     else:
-        log(f"train_loader:dataset:{dataset_name} train_shards:{actual_train_files}/{expected_train_files}")
-    log(f"tokenizer_path:{args.tokenizer_path}")
-    log(
-        f"model_params:{n_params} vocab_size:{args.vocab_size} layers:{args.num_layers} "
-        f"dim:{args.model_dim} heads:{args.num_heads} kv_heads:{args.num_kv_heads} "
-        f"seq_len:{args.train_seq_len} tie_embeddings:{args.tie_embeddings}"
+        log(f"  dataset: {dataset_name} ({actual_train_files}/{expected_train_files} train shards)")
+    log_section(
+        "Model",
+        [
+            ("params", n_params),
+            ("vocab_size", args.vocab_size),
+            ("layers", args.num_layers),
+            ("dim", args.model_dim),
+            ("heads", args.num_heads),
+            ("kv_heads", args.num_kv_heads),
+            ("seq_len", args.train_seq_len),
+            ("tie_embeddings", args.tie_embeddings),
+            ("compute_dtype", COMPUTE_DTYPE),
+            ("tok_emb_dtype", model.tok_emb.weight.dtype),
+            ("linear_weight_dtype", model.blocks[0].attn.c_q.weight.dtype),
+            ("skip_weights_dtype", model.skip_weights.dtype),
+        ],
     )
-    log(
-        f"iterations:{args.iterations} train_batch_tokens:{args.train_batch_tokens} grad_accum_steps:{args.grad_accum_steps} "
-        f"microbatch_tokens:{args.microbatch_tokens} microbatch_batch_size:{args.microbatch_tokens // args.train_seq_len} "
-        f"val_batch_size:{args.val_batch_size} "
-        f"warmup_steps:{args.warmup_steps} max_wallclock_seconds:{args.max_wallclock_seconds:.3f}"
+    log_section(
+        "Train",
+        [
+            ("iterations", args.iterations),
+            ("train_batch_tokens", args.train_batch_tokens),
+            ("grad_accum_steps", args.grad_accum_steps),
+            ("microbatch_tokens", args.microbatch_tokens),
+            ("microbatch_batch_size", args.microbatch_tokens // args.train_seq_len),
+            ("val_batch_size", args.val_batch_size),
+            ("warmup_steps", args.warmup_steps),
+            ("max_wallclock_seconds", f"{args.max_wallclock_seconds:.3f}"),
+            ("mlx_max_microbatch_tokens", args.mlx_max_microbatch_tokens),
+        ],
     )
-    log(f"mlx_max_microbatch_tokens:{args.mlx_max_microbatch_tokens}")
-    log(
-        f"optimizer:muon+adam muon_matrix_params:{len(opt.matrix_keys)} scalar_params:{len(opt.scalar_keys)} "
-        f"embed_lr:{args.tied_embed_lr} "
-        f"matrix_lr:{args.matrix_lr} scalar_lr:{args.scalar_lr} "
-        f"muon_momentum:{args.muon_momentum} muon_steps:{args.muon_backend_steps}"
+    log_section(
+        "Optimizer",
+        [
+            ("kind", "muon+adam"),
+            ("muon_matrix_params", len(opt.matrix_keys)),
+            ("scalar_params", len(opt.scalar_keys)),
+            ("embed_lr", args.tied_embed_lr),
+            ("matrix_lr", args.matrix_lr),
+            ("scalar_lr", args.scalar_lr),
+            ("muon_momentum", args.muon_momentum),
+            ("muon_steps", args.muon_backend_steps),
+        ],
     )
-    log(f"val_bpb:enabled tokenizer_kind=sentencepiece tokenizer_path={args.tokenizer_path}")
-    log(f"compute_dtype:{COMPUTE_DTYPE} compile:True")
-    log(
-        f"dtypes tok_emb:{model.tok_emb.weight.dtype} "
-        f"linear_weight:{model.blocks[0].attn.c_q.weight.dtype} "
-        f"skip_weights:{model.skip_weights.dtype}"
+    log_section(
+        "Validation",
+        [
+            ("metric", "val_loss + val_bpb"),
+            ("tokenizer_kind", "sentencepiece"),
+        ],
     )
 
     # ==============================================================================
@@ -976,6 +1036,7 @@ def main() -> None:
             mx.synchronize()
             if args.warmup_steps <= 20 or (warmup_step + 1) % 10 == 0 or warmup_step + 1 == args.warmup_steps:
                 log(f"warmup_step:{warmup_step + 1}/{args.warmup_steps}")
+        tracker.log_event(name="warmup_complete", message=f"warmup_steps={args.warmup_steps}")
 
         # Prime the standalone eval graph once too. It is compiled separately from value_and_grad.
         val_batch_tokens = args.val_batch_size // args.grad_accum_steps
@@ -1002,7 +1063,10 @@ def main() -> None:
     step = 0
     while True:
         last_step = step == args.iterations or (stop_after_step is not None and step >= stop_after_step)
-        if last_step or (args.val_loss_every > 0 and step % args.val_loss_every == 0):
+        should_validate = (not last_step and args.val_loss_every > 0 and step % args.val_loss_every == 0) or (
+            last_step and not args.fast_dev_run
+        )
+        if should_validate:
             train_time_ms += 1000.0 * (time.perf_counter() - t0)
             # Validation always scans the same fixed full validation split.
             val_loss, val_bpb = eval_val(
@@ -1019,6 +1083,9 @@ def main() -> None:
                     f"step:{step}/{args.iterations} val_loss:{val_loss:.4f} val_bpb:{val_bpb:.4f} "
                     f"train_time:{train_time_ms:.0f}ms step_avg:{train_time_ms / max(step, 1):.2f}ms"
                 )
+            tracker.log_metric(phase="val", name="val_loss", value=val_loss, step=step)
+            tracker.log_metric(phase="val", name="val_bpb", value=val_bpb, step=step)
+            tracker.log_metric(phase="val", name="train_time_ms", value=train_time_ms, step=step)
             t0 = time.perf_counter()
         if last_step:
             if stop_after_step is not None and step < args.iterations:
@@ -1053,8 +1120,17 @@ def main() -> None:
                 f"step:{step}/{args.iterations} train_loss:{train_loss_value:.4f} "
                 f"train_time:{approx_train_time_ms:.0f}ms step_avg:{approx_train_time_ms / step:.2f}ms tok_s:{tok_s:.0f}"
             )
+            tracker.log_metric(phase="train", name="train_loss", value=train_loss_value, step=step)
+            tracker.log_metric(phase="train", name="tok_s", value=tok_s, step=step)
+            tracker.log_metric(phase="train", name="train_time_ms", value=approx_train_time_ms, step=step)
         if max_wallclock_ms is not None and stop_after_step is None and approx_train_time_ms >= max_wallclock_ms:
             stop_after_step = step
+
+    if args.fast_dev_run:
+        log("fast_dev_run:skipping final validation, serialization, and quantized roundtrip eval")
+        tracker.finish(status="completed", notes="fast_dev_run")
+        tracker.close()
+        return
 
     # ==============================================================================
     # FINAL SERIALIZATION + QUANTIZED ROUNDTRIP EVAL
@@ -1066,6 +1142,7 @@ def main() -> None:
     flat_state = {k: v for k, v in tree_flatten(model.state)}
     mx.savez(str(out_path), **flat_state)
     log(f"saved_model:{out_path} bytes:{out_path.stat().st_size}")
+    tracker.log_artifact(name="mlx_model_npz", num_bytes=out_path.stat().st_size)
 
     quant_obj, quant_stats = quantize_state_dict_int8(flat_state)
     quant_raw = pickle.dumps(quant_obj, protocol=pickle.HIGHEST_PROTOCOL)
@@ -1079,6 +1156,15 @@ def main() -> None:
     log(
         f"serialized_model_int8_zlib:{quant_file_bytes} bytes "
         f"(payload:{quant_stats['int8_payload_bytes']} raw_pickle:{quant_serialized_bytes} payload_ratio:{ratio:.2f}x)"
+    )
+    tracker.log_artifact(
+        name="mlx_model_int8_ptz",
+        num_bytes=quant_file_bytes,
+        metadata={
+            "payload_bytes": quant_stats["int8_payload_bytes"],
+            "raw_pickle_bytes": quant_serialized_bytes,
+            "payload_ratio": ratio,
+        },
     )
 
     with quant_path.open("rb") as f:
@@ -1098,6 +1184,11 @@ def main() -> None:
     q_eval_ms = 1000.0 * (time.perf_counter() - q_t0)
     log(f"final_int8_zlib_roundtrip val_loss:{q_val_loss:.4f} val_bpb:{q_val_bpb:.4f} eval_time:{q_eval_ms:.0f}ms")
     log(f"final_int8_zlib_roundtrip_exact val_loss:{q_val_loss:.8f} val_bpb:{q_val_bpb:.8f}")
+    tracker.log_metric(phase="roundtrip", name="val_loss", value=q_val_loss, step=step)
+    tracker.log_metric(phase="roundtrip", name="val_bpb", value=q_val_bpb, step=step)
+    tracker.log_metric(phase="roundtrip", name="eval_time_ms", value=q_eval_ms, step=step)
+    tracker.finish(status="completed")
+    tracker.close()
 
 
 if __name__ == "__main__":

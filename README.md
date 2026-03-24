@@ -94,6 +94,65 @@ python3 train_gpt_mlx.py
 
 Validation always runs on the full `fineweb_val_*` split, which is the fixed first-50k-document set. The smoke command above skips periodic validation and just prints the final `val_loss` and `val_bpb` once at the end.
 
+### Faster Iteration Helpers
+
+For day-to-day experimentation, this repo also includes wrapper scripts under `scripts/`:
+
+```bash
+./scripts/run_mlx_fast_dev.sh
+```
+
+Runs a short Apple Silicon smoke test with `FAST_DEV_RUN=1`, which skips the expensive final validation, serialization, and quantized roundtrip evaluation. Use this to check whether a code change trains sanely at all.
+
+```bash
+./scripts/run_cuda_fast_dev.sh
+```
+
+Runs a short CUDA training-only sanity check with the same `FAST_DEV_RUN=1` behavior.
+
+```bash
+./scripts/run_cuda_short_compare.sh
+```
+
+Runs a short CUDA experiment with periodic validation enabled, but still skips the final serialization and roundtrip evaluation. Use this for quick A100 comparisons.
+
+```bash
+./scripts/run_cuda_full_eval.sh
+```
+
+Runs the normal end-to-end CUDA path, including final serialization and `final_int8_zlib_roundtrip` evaluation. Use this only for candidate runs you actually want to measure properly.
+
+All four scripts accept env-var overrides, for example:
+
+```bash
+RUN_ID=my_try ITERATIONS=200 ./scripts/run_cuda_short_compare.sh
+```
+
+### Experiment Tracking
+
+Runs now write structured experiment data to SQLite by default:
+
+- database path: `./logs/experiments.sqlite3`
+- disable tracking: `EXPERIMENT_TRACKING=0`
+- move the database: `EXPERIMENT_DB_PATH=/path/to/experiments.sqlite3`
+
+Each tracked run stores:
+
+- the run metadata (`run_id`, backend, script, timestamps, status)
+- all hyperparameters visible on the `Hyperparameters` object
+- periodic train and validation metrics
+- final artifact sizes, when a full serialization path runs
+
+Useful queries without opening SQLite manually:
+
+```bash
+python3 scripts/experiments_report.py latest
+python3 scripts/experiments_report.py param rope_base --metric val_bpb
+python3 scripts/experiments_report.py param mlp_mult --metric train_loss
+```
+
+The `param` view is intentionally simple: it lets you quickly inspect how one knob moved a chosen metric across recent runs.
+
 ### Scaling Up to a Remote Machine
 
 Once you're happy with your local tests, or you want more compute, switch to a remote CUDA machine.
