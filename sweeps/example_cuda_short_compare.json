@@ -1,0 +1,34 @@
+{
+  "group": "cuda_short_compare_basics",
+  "command": "./scripts/run_cuda_short_compare.sh",
+  "defaults": {
+    "ITERATIONS": 200,
+    "TRAIN_BATCH_TOKENS": 262144,
+    "VAL_LOSS_EVERY": 100,
+    "VAL_BATCH_SIZE": 524288,
+    "WARMUP_STEPS": 10
+  },
+  "experiments": [
+    {
+      "label": "baseline"
+    },
+    {
+      "label": "rope_20k",
+      "env": {
+        "ROPE_BASE": 20000
+      }
+    },
+    {
+      "label": "kv2",
+      "env": {
+        "NUM_KV_HEADS": 2
+      }
+    },
+    {
+      "label": "mlp3",
+      "env": {
+        "MLP_MULT": 3
+      }
+    }
+  ]
+}

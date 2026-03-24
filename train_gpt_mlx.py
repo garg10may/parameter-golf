@@ -850,7 +850,7 @@ def main() -> None:
         run_id=args.run_id,
         log_path=str(logfile),
     )
-    tracker.start_run()
+    tracker.start_run(notes=os.environ.get("EXPERIMENT_COMMENT"))
 
     def log(msg: str, console: bool = True) -> None:
         if console:
@@ -889,6 +889,9 @@ def main() -> None:
             "dataset_name": dataset_name,
             "actual_train_shards": actual_train_files,
             "expected_train_shards": expected_train_files,
+            "experiment_group": os.environ.get("EXPERIMENT_GROUP"),
+            "experiment_label": os.environ.get("EXPERIMENT_LABEL"),
+            "experiment_comment": os.environ.get("EXPERIMENT_COMMENT"),
         }
     )
     val_tokens = load_validation_tokens(args.val_files, args.train_seq_len)
@@ -938,6 +941,7 @@ def main() -> None:
 
     # Print config once so logs are self-describing.
     n_params = sum(int(np.prod(p.shape)) for _, p in tree_flatten(model.parameters()))
+    tracker.log_params({"model_param_count": n_params})
     log_section(
         "Run",
         [
@@ -1128,7 +1132,7 @@ def main() -> None:
 
     if args.fast_dev_run:
         log("fast_dev_run:skipping final validation, serialization, and quantized roundtrip eval")
-        tracker.finish(status="completed", notes="fast_dev_run")
+        tracker.finish(status="completed")
         tracker.close()
         return
 

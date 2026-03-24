@@ -1,0 +1,81 @@
+{
+  "group": "macos_fast_dev_first10",
+  "command": "./scripts/run_mlx_fast_dev.sh",
+  "defaults": {
+    "ITERATIONS": 50,
+    "VAL_LOSS_EVERY": 0,
+    "FAST_DEV_RUN": 1,
+    "TRAIN_BATCH_TOKENS": 8192,
+    "WARMUP_STEPS": 5,
+    "TRAIN_LOG_EVERY": 10
+  },
+  "experiments": [
+    {
+      "label": "baseline",
+      "comment": "Reference fast-dev baseline on the MLX path. Compare every other run against this before reading too much into noise."
+    },
+    {
+      "label": "rope_5k",
+      "comment": "Lower RoPE base. Cheap positional change to see whether the run looks immediately worse or unstable.",
+      "env": {
+        "ROPE_BASE": 5000
+      }
+    },
+    {
+      "label": "rope_20k",
+      "comment": "Higher RoPE base. Another very local positional change that is easy to reason about.",
+      "env": {
+        "ROPE_BASE": 20000
+      }
+    },
+    {
+      "label": "kv2",
+      "comment": "Reduce KV heads from 4 to 2. Good first architecture knob because it is simple and directly tied to attention capacity/compression tradeoffs.",
+      "env": {
+        "NUM_KV_HEADS": 2
+      }
+    },
+    {
+      "label": "kv8",
+      "comment": "Increase KV heads to full MHA-style 8. Useful as a contrast against the more compressed GQA baseline.",
+      "env": {
+        "NUM_KV_HEADS": 8
+      }
+    },
+    {
+      "label": "mlp3",
+      "comment": "Increase MLP multiplier from 2 to 3. This is a common first ablation because it changes capacity in one obvious place.",
+      "env": {
+        "MLP_MULT": 3
+      }
+    },
+    {
+      "label": "qk_gain_1p0",
+      "comment": "Lower QK gain init. Good for checking whether early optimization becomes calmer or weaker.",
+      "env": {
+        "QK_GAIN_INIT": 1.0
+      }
+    },
+    {
+      "label": "qk_gain_2p0",
+      "comment": "Raise QK gain init. Useful opposite-side check to see whether attention sharpness helps or destabilizes the first 50 steps.",
+      "env": {
+        "QK_GAIN_INIT": 2.0
+      }
+    },
+    {
+      "label": "tied_embed_lr_0p08",
+      "comment": "Slightly higher tied-embedding learning rate. Embedding/head learning rate is a plausible early sensitivity knob.",
+      "env": {
+        "TIED_EMBED_LR": 0.08
+      }
+    },
+    {
+      "label": "matrix_lr_0p03",
+      "comment": "Slightly lower matrix learning rate. Good first optimizer ablation without changing optimizer families.",
+      "env": {
+        "MATRIX_LR": 0.03
+      }
+    }
+  ]
+}

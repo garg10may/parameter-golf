@@ -781,7 +781,7 @@ def main() -> None:
             run_id=args.run_id,
             log_path=logfile,
         )
-        tracker.start_run()
+        tracker.start_run(notes=os.environ.get("EXPERIMENT_COMMENT"))
     else:
         tracker = None
 
@@ -836,6 +836,9 @@ def main() -> None:
                 "actual_train_shards": actual_train_files,
                 "world_size": world_size,
                 "grad_accum_steps": grad_accum_steps,
+                "experiment_group": os.environ.get("EXPERIMENT_GROUP"),
+                "experiment_label": os.environ.get("EXPERIMENT_LABEL"),
+                "experiment_comment": os.environ.get("EXPERIMENT_COMMENT"),
             }
         )
     base_bytes_lut, has_leading_space_lut, is_boundary_token_lut = build_sentencepiece_luts(
@@ -937,6 +940,8 @@ def main() -> None:
         optimizers.insert(1, optimizer_head)
 
     n_params = sum(p.numel() for p in base_model.parameters())
+    if tracker is not None:
+        tracker.log_params({"model_param_count": n_params})
     log_section(
         "Model",
         [
@@ -1159,7 +1164,7 @@ def main() -> None:
     if args.fast_dev_run:
         log0("fast_dev_run:skipping final validation, serialization, and quantized roundtrip eval")
         if tracker is not None:
-            tracker.finish(status="completed", notes="fast_dev_run")
+            tracker.finish(status="completed")
             tracker.close()
         if distributed:
             dist.destroy_process_group()

@@ -51,6 +51,64 @@ def latest_runs(conn: sqlite3.Connection, limit: int) -> list[sqlite3.Row]:
     ).fetchall()
 
 
+def runs_for_group(conn: sqlite3.Connection, group: str, limit: int) -> list[sqlite3.Row]:
+    return conn.execute(
+        """
+        WITH group_runs AS (
+            SELECT run_id
+            FROM params
+            WHERE name = 'experiment_group' AND value_text = ?
+        ),
+        latest_metric AS (
+            SELECT
+                m.run_id,
+                m.phase,
+                m.name,
+                m.value,
+                ROW_NUMBER() OVER (
+                    PARTITION BY m.run_id, m.phase, m.name
+                    ORDER BY COALESCE(m.step, -1) DESC, m.id DESC
+                ) AS rn
+            FROM metrics m
+            JOIN group_runs g ON g.run_id = m.run_id
+            WHERE (m.phase = 'roundtrip' AND m.name IN ('val_bpb', 'val_loss'))
+               OR (m.phase = 'val' AND m.name IN ('val_bpb', 'val_loss'))
+               OR (m.phase = 'train' AND m.name = 'train_loss')
+        ),
+        labels AS (
+            SELECT run_id, value_text AS experiment_label
+            FROM params
+            WHERE name = 'experiment_label'
+        ),
+        comments AS (
+            SELECT run_id, value_text AS experiment_comment
+            FROM params
+            WHERE name = 'experiment_comment'
+        )
+        SELECT
+            r.run_id,
+            r.backend,
+            r.status,
+            r.started_at_utc,
+            r.notes,
+            l.experiment_label,
+            c.experiment_comment,
+            MAX(CASE WHEN lm.phase = 'roundtrip' AND lm.name = 'val_bpb' AND lm.rn = 1 THEN lm.value END) AS roundtrip_val_bpb,
+            MAX(CASE WHEN lm.phase = 'val' AND lm.name = 'val_bpb' AND lm.rn = 1 THEN lm.value END) AS val_bpb,
+            MAX(CASE WHEN lm.phase = 'train' AND lm.name = 'train_loss' AND lm.rn = 1 THEN lm.value END) AS train_loss
+        FROM runs r
+        JOIN group_runs g ON g.run_id = r.run_id
+        LEFT JOIN latest_metric lm ON lm.run_id = r.run_id
+        LEFT JOIN labels l ON l.run_id = r.run_id
+        LEFT JOIN comments c ON c.run_id = r.run_id
+        GROUP BY r.run_id, r.backend, r.status, r.started_at_utc, r.notes, l.experiment_label, c.experiment_comment
+        ORDER BY r.started_at_utc DESC
+        LIMIT ?
+        """,
+        (group, limit),
+    ).fetchall()
+
+
 def parameter_effect(conn: sqlite3.Connection, name: str, metric: str, limit: int) -> list[sqlite3.Row]:
     return conn.execute(
         """
@@ -121,6 +179,10 @@ def main() -> None:
     latest = subparsers.add_parser("latest", help="Show the latest runs.")
     latest.add_argument("--limit", type=int, default=20)
 
+    group = subparsers.add_parser("group", help="Show runs for one experiment group.")
+    group.add_argument("name", help="Experiment group name.")
+    group.add_argument("--limit", type=int, default=50)
+
     param = subparsers.add_parser("param", help="Show one hyperparameter against a metric.")
     param.add_argument("name", help="Hyperparameter name, for example rope_base.")
     param.add_argument("--metric", default="val_bpb", help="Metric name to compare against.")
@@ -142,6 +204,27 @@ def main() -> None:
                     f"{row['val_loss']:.4f}" if row["val_loss"] is not None else "",
                     f"{row['val_bpb']:.4f}" if row["val_bpb"] is not None else "",
                     f"{row['roundtrip_val_bpb']:.4f}" if row["roundtrip_val_bpb"] is not None else "",
+                    row["started_at_utc"],
+                ]
+                for row in rows
+            ],
+        )
+        return
+
+    if args.command == "group":
+        rows = runs_for_group(conn, args.name, args.limit)
+        print_rows(
+            ["run_id", "label", "backend", "status", "train_loss", "val_bpb", "roundtrip_val_bpb", "comment", "started_at_utc"],
+            [
+                [
+                    row["run_id"],
+                    row["experiment_label"] or "",
+                    row["backend"],
+                    row["status"],
+                    f"{row['train_loss']:.4f}" if row["train_loss"] is not None else "",
+                    f"{row['val_bpb']:.4f}" if row["val_bpb"] is not None else "",
+                    f"{row['roundtrip_val_bpb']:.4f}" if row["roundtrip_val_bpb"] is not None else "",
+                    row["experiment_comment"] or row["notes"] or "",
                     row["started_at_utc"],
                 ]
                 for row in rows

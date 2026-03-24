@@ -147,11 +147,54 @@ Useful queries without opening SQLite manually:
 
 ```bash
 python3 scripts/experiments_report.py latest
+python3 scripts/experiments_report.py group cuda_short_compare_basics
 python3 scripts/experiments_report.py param rope_base --metric val_bpb
 python3 scripts/experiments_report.py param mlp_mult --metric train_loss
 ```
 
 The `param` view is intentionally simple: it lets you quickly inspect how one knob moved a chosen metric across recent runs.
+
+### Running Multiple Experiments
+
+To run a sweep of experiments sequentially, use the JSON-manifest runner:
+
+```bash
+python3 scripts/run_sweep.py sweeps/example_cuda_short_compare.json
+```
+
+The manifest defines:
+
+- `group`: logical name written into the SQLite database
+- `command`: which helper script to invoke for each run
+- `defaults`: env vars shared by every run in the sweep
+- `experiments`: a list of labeled overrides
+
+Each experiment gets:
+
+- a generated `RUN_ID`
+- `EXPERIMENT_GROUP=<group>`
+- `EXPERIMENT_LABEL=<label>`
+- `EXPERIMENT_COMMENT=<comment>`
+
+So after a sweep finishes, you can inspect just that group:
+
+```bash
+python3 scripts/experiments_report.py group cuda_short_compare_basics
+```
+
+An example 10-run Mac smoke sweep is included here:
+
+```bash
+python3 scripts/run_sweep.py sweeps/macos_fast_dev_first10.json
+```
+
+Each experiment entry can also include a `comment` field. That comment is written into the SQLite run record so you can remember why a run existed when you inspect the group later.
+
+If you want to keep going after a failed run:
+
+```bash
+python3 scripts/run_sweep.py sweeps/example_cuda_short_compare.json --continue-on-error
+```
 
 ### Scaling Up to a Remote Machine
 

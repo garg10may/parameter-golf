@@ -1,0 +1,50 @@
+{
+  "group": "macos_sanity_extremes",
+  "command": "./scripts/run_mlx_fast_dev.sh",
+  "defaults": {
+    "ITERATIONS": 50,
+    "VAL_LOSS_EVERY": 0,
+    "FAST_DEV_RUN": 1,
+    "TRAIN_BATCH_TOKENS": 8192,
+    "WARMUP_STEPS": 5,
+    "TRAIN_LOG_EVERY": 10
+  },
+  "experiments": [
+    {
+      "label": "baseline",
+      "comment": "Reference MLX fast-dev baseline for comparison."
+    },
+    {
+      "label": "obviously_worse_tiny_model",
+      "comment": "Much smaller model. This should be clearly worse on 50-step train loss if the harness is behaving sensibly.",
+      "env": {
+        "MODEL_DIM": 256,
+        "NUM_HEADS": 4,
+        "NUM_KV_HEADS": 2,
+        "NUM_LAYERS": 4
+      }
+    },
+    {
+      "label": "obviously_worse_high_embed_lr",
+      "comment": "Aggressively high tied-embedding LR. Intended to worsen early optimization and prove the harness reacts to bad settings.",
+      "env": {
+        "TIED_EMBED_LR": 0.2
+      }
+    },
+    {
+      "label": "likely_better_wider_model",
+      "comment": "Wider model with the same depth. Not guaranteed, but this is a more substantial capacity increase and should move train loss more than subtle one-knob changes.",
+      "env": {
+        "MODEL_DIM": 640
+      }
+    },
+    {
+      "label": "likely_better_wider_mlp3",
+      "comment": "Wider model plus larger MLP. Again not guaranteed, but this is the kind of change that is more likely to show a clear train-loss effect on a tiny proxy.",
+      "env": {
+        "MODEL_DIM": 640,
+        "MLP_MULT": 3
+      }
+    }
+  ]
+}
