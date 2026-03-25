@@ -24,6 +24,7 @@ import sentencepiece as spm
 import mlx.core as mx
 import mlx.nn as nn
 import mlx.optimizers as optim
+from advanced_features import reject_advanced_env_vars
 from experiment_tracking import SQLiteExperimentTracker, collect_hyperparameters
 from mlx.utils import tree_flatten, tree_unflatten
 
@@ -836,6 +837,7 @@ def clip_grad_tree(grads_tree: dict, max_norm: float) -> dict:
 
 
 def main() -> None:
+    reject_advanced_env_vars("train_gpt_mlx.py")
     # ==============================================================================
     # TOKENIZER + VALIDATION METRIC SETUP
     # ==============================================================================
@@ -892,6 +894,12 @@ def main() -> None:
             "experiment_group": os.environ.get("EXPERIMENT_GROUP"),
             "experiment_label": os.environ.get("EXPERIMENT_LABEL"),
             "experiment_comment": os.environ.get("EXPERIMENT_COMMENT"),
+            "launch_source": os.environ.get("LAUNCH_SOURCE"),
+            "launch_platform": os.environ.get("LAUNCH_PLATFORM"),
+            "launch_device_kind": os.environ.get("LAUNCH_DEVICE_KIND"),
+            "launch_device_count": int(os.environ["LAUNCH_DEVICE_COUNT"]) if "LAUNCH_DEVICE_COUNT" in os.environ else None,
+            "launch_resolved_script": os.environ.get("LAUNCH_RESOLVED_SCRIPT"),
+            "launch_trainer_mode": os.environ.get("LAUNCH_TRAINER_MODE"),
         }
     )
     val_tokens = load_validation_tokens(args.val_files, args.train_seq_len)

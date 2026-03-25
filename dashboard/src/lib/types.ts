@@ -183,3 +183,58 @@ export interface RunFilters {
   sort?: string;
   dir?: "asc" | "desc";
 }
+
+export interface LaunchRequestSummary {
+  launchId: string;
+  runId: string;
+  requestedAtUtc: string;
+  updatedAtUtc: string;
+  status: string;
+  trainerMode: string;
+  resolvedScriptName: string | null;
+  platform: string | null;
+  deviceKind: string | null;
+  deviceCount: number | null;
+  pid: number | null;
+  experimentGroup: string | null;
+  experimentLabel: string | null;
+  message: string | null;
+  runStatus: string | null;
+}
+
+export interface TrainingSystemInfo {
+  platform: string;
+  platformLabel: string;
+  machine: string;
+  hostname: string;
+  pythonExecutable: string;
+  pythonVersion: string;
+  repoRoot: string;
+  dbPath: string;
+  cudaAvailable: boolean;
+  cudaDeviceCount: number;
+  cudaDeviceNames: string[];
+  mlxAvailable: boolean;
+  supportedTrainerModes: string[];
+  defaultNprocPerNode: number;
+  defaultDeviceKind: string;
+  launchSupport: string;
+  launchMessage: string;
+  torchVersion?: string;
+  torchError?: string;
+  mlxVersion?: string | null;
+  mlxError?: string;
+}
+
+export interface TrainingLaunchResult {
+  launchId: string;
+  runId: string;
+  status: string;
+  trainerMode: string;
+  resolvedScriptName: string;
+  deviceKind: string;
+  deviceCount: number;
+  nprocPerNode: number;
+  launcherLogPath: string;
+  message: string;
+}

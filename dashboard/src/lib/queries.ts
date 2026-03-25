@@ -15,6 +15,7 @@ import type {
   RunDetail,
   RunEvent,
   RunFilters,
+  LaunchRequestSummary,
   RunParameter,
   RunSummary,
 } from "@/lib/types";
@@ -33,6 +34,12 @@ const EXCLUDED_PARAM_NAMES = new Set([
   "experiment_comment",
   "experiment_group",
   "experiment_label",
+  "launch_device_count",
+  "launch_device_kind",
+  "launch_platform",
+  "launch_resolved_script",
+  "launch_source",
+  "launch_trainer_mode",
   "model_param_count",
   "out_dir",
   "run_id",
@@ -800,4 +807,86 @@ export function getDashboardMeta() {
     runs,
     groups,
   };
+}
+
+function hasTable(name: string) {
+  const db = getDb();
+  if (!db) return false;
+  const row = db
+    .prepare(
+      `
+      SELECT 1 AS present
+      FROM sqlite_master
+      WHERE type = 'table' AND name = ?
+      `,
+    )
+    .get(name) as { present: number } | undefined;
+  return Boolean(row?.present);
+}
+
+export function getLaunchRequests(limit = 20): LaunchRequestSummary[] {
+  const db = getDb();
+  if (!db || !hasTable("launch_requests")) {
+    return [];
+  }
+  const rows = db
+    .prepare(
+      `
+      SELECT
+        l.launch_id,
+        l.run_id,
+        l.requested_at_utc,
+        l.updated_at_utc,
+        l.status,
+        l.trainer_mode,
+        l.resolved_script_name,
+        l.platform,
+        l.device_kind,
+        l.device_count,
+        l.pid,
+        l.experiment_group,
+        l.experiment_label,
+        l.message,
+        r.status AS run_status
+      FROM launch_requests l
+      LEFT JOIN runs r ON r.run_id = l.run_id
+      ORDER BY l.requested_at_utc DESC
+      LIMIT ?
+      `,
+    )
+    .all(limit) as Array<{
+      launch_id: string;
+      run_id: string;
+      requested_at_utc: string;
+      updated_at_utc: string;
+      status: string;
+      trainer_mode: string;
+      resolved_script_name: string | null;
+      platform: string | null;
+      device_kind: string | null;
+      device_count: number | null;
+      pid: number | null;
+      experiment_group: string | null;
+      experiment_label: string | null;
+      message: string | null;
+      run_status: string | null;
+    }>;
+  return rows
+    .map((row) => ({
+      launchId: row.launch_id,
+      runId: row.run_id,
+      requestedAtUtc: row.requested_at_utc,
+      updatedAtUtc: row.updated_at_utc,
+      status: row.status,
+      trainerMode: row.trainer_mode,
+      resolvedScriptName: row.resolved_script_name,
+      platform: row.platform,
+      deviceKind: row.device_kind,
+      deviceCount: row.device_count,
+      pid: row.pid,
+      experimentGroup: row.experiment_group,
+      experimentLabel: row.experiment_label,
+      message: row.message,
+      runStatus: row.run_status,
+    })) as LaunchRequestSummary[];
 }

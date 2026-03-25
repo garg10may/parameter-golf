@@ -1,0 +1,51 @@
+{
+  "group": "advanced_cuda_train_modifiers",
+  "command": "./scripts/run_cuda_short_compare.sh",
+  "defaults": {
+    "TRAIN_SCRIPT": "train_gpt_advanced.py",
+    "ITERATIONS": 200,
+    "TRAIN_BATCH_TOKENS": 262144,
+    "VAL_LOSS_EVERY": 100,
+    "VAL_BATCH_SIZE": 524288,
+    "WARMUP_STEPS": 10,
+    "MATRIX_LR": 0.02,
+    "SCALAR_LR": 0.02,
+    "TIED_EMBED_LR": 0.03
+  },
+  "experiments": [
+    {
+      "label": "baseline",
+      "comment": "Reference advanced run with no train-time modifiers."
+    },
+    {
+      "label": "orthogonal_init",
+      "comment": "Orthogonal initialization only.",
+      "env": {
+        "INIT_MODE": "orthogonal"
+      }
+    },
+    {
+      "label": "swa_wd",
+      "comment": "Weight decay plus SWA without changing initialization.",
+      "env": {
+        "MUON_WEIGHT_DECAY": 0.04,
+        "ADAM_WEIGHT_DECAY": 0.01,
+        "SWA_ENABLED": 1,
+        "SWA_START_FRAC": 0.5,
+        "SWA_EVERY": 25
+      }
+    },
+    {
+      "label": "orthogonal_swa_wd",
+      "comment": "Stack orthogonal init, SWA, and decoupled weight decay.",
+      "env": {
+        "INIT_MODE": "orthogonal",
+        "MUON_WEIGHT_DECAY": 0.04,
+        "ADAM_WEIGHT_DECAY": 0.01,
+        "SWA_ENABLED": 1,
+        "SWA_START_FRAC": 0.5,
+        "SWA_EVERY": 25
+      }
+    }
+  ]
+}

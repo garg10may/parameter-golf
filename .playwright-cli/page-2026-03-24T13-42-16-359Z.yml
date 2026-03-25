@@ -1,0 +1,297 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - complementary [ref=e4]:
+      - link "Parameter Golf Experiment Atlas Read the signals, not the raw logs." [ref=e6] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e7]: Parameter Golf
+        - generic [ref=e8]: Experiment Atlas
+        - paragraph [ref=e9]: Read the signals, not the raw logs.
+      - generic [ref=e10]:
+        - navigation [ref=e11]:
+          - link "Signals" [ref=e12] [cursor=pointer]:
+            - /url: /
+          - link "Runs" [ref=e13] [cursor=pointer]:
+            - /url: /runs
+          - link "Sweeps" [ref=e14] [cursor=pointer]:
+            - /url: /groups
+          - link "Launch" [ref=e15] [cursor=pointer]:
+            - /url: /launch
+        - generic [ref=e16]: The ranking rule always prefers trusted roundtrip/validation metrics over train-only proxy scores.
+    - main [ref=e17]:
+      - generic [ref=e18]:
+        - generic [ref=e19]:
+          - generic [ref=e20]: SQLite-backed analytics
+          - heading "Signals, sweeps, and suspicious runs" [level=1] [ref=e21]
+        - generic [ref=e22]:
+          - button "Auto refresh 10s" [ref=e23]:
+            - text: Auto refresh
+            - generic [ref=e25]: 10s
+          - generic [ref=e26]: launch-enabled
+      - generic [ref=e27]:
+        - generic [ref=e28]:
+          - generic [ref=e30]:
+            - generic [ref=e31]: Launch
+            - heading "Run training from the dashboard" [level=2] [ref=e32]
+            - paragraph [ref=e33]: Choose a preset, tune the knobs, and let the launcher resolve the right training entrypoint for this machine.
+          - generic [ref=e34]:
+            - generic [ref=e35]:
+              - generic [ref=e36]:
+                - generic [ref=e37]:
+                  - generic [ref=e38]:
+                    - generic [ref=e39]: System
+                    - generic [ref=e40]: Darwin · Cpu
+                    - generic [ref=e41]: No supported training backend detected.
+                  - button "Refresh system" [ref=e42]
+                - generic [ref=e43]:
+                  - generic [ref=e44]:
+                    - generic [ref=e45]: Host
+                    - generic [ref=e46]: Tanmays-MacBook-Air.local
+                    - generic [ref=e47]: arm64
+                  - generic [ref=e48]:
+                    - generic [ref=e49]: Python
+                    - generic [ref=e50]: 3.14.3
+                    - generic [ref=e51]: /opt/homebrew/opt/python@3.14/bin/python3.14
+                  - generic [ref=e52]:
+                    - generic [ref=e53]: GPUs
+                    - generic [ref=e54]: "0"
+                    - generic [ref=e55]: default nproc=1
+                  - generic [ref=e56]:
+                    - generic [ref=e57]: Modes
+                    - generic [ref=e58]: None
+                    - generic [ref=e59]: /Users/garg10may/coding/parameter-golf/logs/experiments.sqlite3
+              - generic [ref=e60]:
+                - generic [ref=e61]:
+                  - generic [ref=e62]: Launcher contract
+                  - generic [ref=e63]: The UI writes a launch request, the Python entrypoint resolves the right trainer for this machine, and the run appears in the normal SQLite-backed views as soon as tracking starts.
+                - generic [ref=e64]: The selected trainer mode is not launchable on this host.
+            - generic [ref=e65]:
+              - generic [ref=e66]:
+                - generic [ref=e67]:
+                  - generic [ref=e68]: Preset
+                  - combobox "Preset" [ref=e69]:
+                    - option "Fast dev"
+                    - option "Short compare" [selected]
+                    - option "Full eval"
+                - generic [ref=e70]:
+                  - generic [ref=e71]: Trainer mode
+                  - combobox "Trainer mode Baseline auto-selects CUDA or MLX depending on the host." [ref=e72]:
+                    - option "Baseline" [disabled] [selected]
+                    - option "Advanced CUDA" [disabled]
+                  - generic [ref=e73]: Baseline auto-selects CUDA or MLX depending on the host.
+                - generic [ref=e74]:
+                  - generic [ref=e75]: Run ID
+                  - textbox "Run ID Leave blank to auto-generate one." [ref=e76]
+                  - generic [ref=e77]: Leave blank to auto-generate one.
+                - generic [ref=e78]:
+                  - generic [ref=e79]: Nproc override
+                  - spinbutton "Nproc override Blank uses all detected GPUs on CUDA hosts." [ref=e80]
+                  - generic [ref=e81]: Blank uses all detected GPUs on CUDA hosts.
+              - generic [ref=e82]:
+                - generic [ref=e83]:
+                  - generic [ref=e84]: Group
+                  - textbox "Group" [ref=e85]:
+                    - /placeholder: ui_advanced_trials
+                - generic [ref=e86]:
+                  - generic [ref=e87]: Label
+                  - textbox "Label" [ref=e88]:
+                    - /placeholder: baseline
+                - generic [ref=e89]:
+                  - generic [ref=e90]: Comment
+                  - textbox "Comment" [ref=e91]:
+                    - /placeholder: Why this run exists
+              - generic [ref=e92]:
+                - generic [ref=e93]:
+                  - generic [ref=e94]: Data path
+                  - textbox "Data path Blank uses the repo default dataset path." [ref=e95]
+                  - generic [ref=e96]: Blank uses the repo default dataset path.
+                - generic [ref=e97]:
+                  - generic [ref=e98]: Tokenizer path
+                  - textbox "Tokenizer path Blank uses the repo default tokenizer path." [ref=e99]
+                  - generic [ref=e100]: Blank uses the repo default tokenizer path.
+                - generic [ref=e101]:
+                  - generic [ref=e102]: Vocab size
+                  - spinbutton "Vocab size" [ref=e103]: "1024"
+              - generic [ref=e104]:
+                - generic [ref=e105]: Execution
+                - generic [ref=e106]:
+                  - generic [ref=e107]:
+                    - generic [ref=e108]: Iterations
+                    - spinbutton "Iterations" [ref=e109]: "300"
+                  - generic [ref=e110]:
+                    - generic [ref=e111]: Batch tokens
+                    - spinbutton "Batch tokens" [ref=e112]: "262144"
+                  - generic [ref=e113]:
+                    - generic [ref=e114]: Train seq len
+                    - spinbutton "Train seq len" [ref=e115]: "1024"
+                  - generic [ref=e116]:
+                    - generic [ref=e117]: Warmup steps
+                    - spinbutton "Warmup steps" [ref=e118]: "10"
+                  - generic [ref=e119]:
+                    - generic [ref=e120]: Max wallclock (s)
+                    - spinbutton "Max wallclock (s)" [ref=e121]: "600"
+                  - generic [ref=e122]:
+                    - generic [ref=e123]: Train log every
+                    - spinbutton "Train log every" [ref=e124]: "25"
+                  - generic [ref=e125]:
+                    - generic [ref=e126]: Val batch size
+                    - spinbutton "Val batch size" [ref=e127]: "524288"
+                  - generic [ref=e128]:
+                    - generic [ref=e129]:
+                      - checkbox "Fast dev run" [checked] [ref=e130]
+                      - text: Fast dev run
+                    - generic [ref=e131]:
+                      - checkbox "Periodic validation" [checked] [ref=e132]
+                      - text: Periodic validation
+                - generic [ref=e134]:
+                  - generic [ref=e135]: Val loss every
+                  - spinbutton "Val loss every Ignored when periodic validation is off." [ref=e136]: "100"
+                  - generic [ref=e137]: Ignored when periodic validation is off.
+              - generic [ref=e138]:
+                - generic [ref=e139]: Model and optimizer
+                - generic [ref=e140]:
+                  - generic [ref=e141]:
+                    - generic [ref=e142]: Layers
+                    - spinbutton "Layers" [ref=e143]: "9"
+                  - generic [ref=e144]:
+                    - generic [ref=e145]: Model dim
+                    - spinbutton "Model dim" [ref=e146]: "512"
+                  - generic [ref=e147]:
+                    - generic [ref=e148]: Heads
+                    - spinbutton "Heads" [ref=e149]: "8"
+                  - generic [ref=e150]:
+                    - generic [ref=e151]: KV heads
+                    - spinbutton "KV heads" [ref=e152]: "4"
+                  - generic [ref=e153]:
+                    - generic [ref=e154]: MLP mult
+                    - spinbutton "MLP mult" [ref=e155]: "2"
+                  - generic [ref=e156]:
+                    - generic [ref=e157]: Tied embed LR
+                    - spinbutton "Tied embed LR" [ref=e158]: "0.05"
+                  - generic [ref=e159]:
+                    - generic [ref=e160]: Matrix LR
+                    - spinbutton "Matrix LR" [ref=e161]: "0.04"
+                  - generic [ref=e162]:
+                    - generic [ref=e163]: Scalar LR
+                    - spinbutton "Scalar LR" [ref=e164]: "0.04"
+                  - generic [ref=e165]:
+                    - generic [ref=e166]: RoPE base
+                    - spinbutton "RoPE base" [ref=e167]: "10000"
+                  - generic [ref=e168]:
+                    - generic [ref=e169]: QK gain init
+                    - spinbutton "QK gain init" [ref=e170]: "1.5"
+                  - generic [ref=e171]:
+                    - generic [ref=e172]: Grad clip norm
+                    - spinbutton "Grad clip norm" [ref=e173]: "0"
+              - generic [ref=e174]:
+                - generic [ref=e175]:
+                  - generic [ref=e176]:
+                    - generic [ref=e177]: Advanced blocks
+                    - generic [ref=e178]: These env vars are only sent when trainer mode is set to Advanced CUDA.
+                  - generic [ref=e179]: inactive
+                - generic [ref=e180]:
+                  - generic [ref=e181]:
+                    - generic [ref=e182]:
+                      - checkbox "Use SmearGate" [disabled] [ref=e183]
+                      - text: Use SmearGate
+                    - generic [ref=e184]:
+                      - checkbox "Use BigramHash" [disabled] [ref=e185]
+                      - text: Use BigramHash
+                    - generic [ref=e186]:
+                      - checkbox "Enable QAT" [disabled] [ref=e187]
+                      - text: Enable QAT
+                    - generic [ref=e188]:
+                      - checkbox "Enable SWA" [disabled] [ref=e189]
+                      - text: Enable SWA
+                  - generic [ref=e190]:
+                    - generic [ref=e191]: Eval mode
+                    - combobox "Eval mode" [disabled] [ref=e192]:
+                      - option "Standard" [selected]
+                      - option "Sliding"
+                  - generic [ref=e193]:
+                    - generic [ref=e194]: Init mode
+                    - combobox "Init mode" [disabled] [ref=e195]:
+                      - option "Default" [selected]
+                      - option "Orthogonal"
+                  - generic [ref=e196]:
+                    - generic [ref=e197]: Export codec
+                    - combobox "Export codec" [disabled] [ref=e198]:
+                      - option "zlib" [selected]
+                      - option "zstd"
+                  - generic [ref=e199]:
+                    - generic [ref=e200]: Bigram vocab
+                    - spinbutton "Bigram vocab Only used when BigramHash is enabled." [disabled] [ref=e201]: "4096"
+                    - generic [ref=e202]: Only used when BigramHash is enabled.
+                  - generic [ref=e203]:
+                    - generic [ref=e204]: Bigram dim
+                    - spinbutton "Bigram dim Only used when BigramHash is enabled." [disabled] [ref=e205]: "128"
+                    - generic [ref=e206]: Only used when BigramHash is enabled.
+                  - generic [ref=e207]:
+                    - generic [ref=e208]: Eval stride
+                    - spinbutton "Eval stride Only used in sliding eval mode." [disabled] [ref=e209]: "64"
+                    - generic [ref=e210]: Only used in sliding eval mode.
+                  - generic [ref=e211]:
+                    - generic [ref=e212]: Eval batch seqs
+                    - spinbutton "Eval batch seqs Only used in sliding eval mode." [disabled] [ref=e213]: "32"
+                    - generic [ref=e214]: Only used in sliding eval mode.
+                  - generic [ref=e215]:
+                    - generic [ref=e216]: QAT bits
+                    - combobox "QAT bits Only used when QAT is enabled." [disabled] [ref=e217]:
+                      - option "4"
+                      - option "5"
+                      - option "6" [selected]
+                      - option "7"
+                      - option "8"
+                    - generic [ref=e218]: Only used when QAT is enabled.
+                  - generic [ref=e219]:
+                    - generic [ref=e220]: SWA start frac
+                    - spinbutton "SWA start frac Only used when SWA is enabled." [disabled] [ref=e221]: "0.5"
+                    - generic [ref=e222]: Only used when SWA is enabled.
+                  - generic [ref=e223]:
+                    - generic [ref=e224]: SWA every
+                    - spinbutton "SWA every Only used when SWA is enabled." [disabled] [ref=e225]: "50"
+                    - generic [ref=e226]: Only used when SWA is enabled.
+                  - generic [ref=e227]:
+                    - generic [ref=e228]: Codec level
+                    - spinbutton "Codec level" [disabled] [ref=e229]: "0"
+                  - generic [ref=e230]:
+                    - generic [ref=e231]: Tied embed export
+                    - combobox "Tied embed export" [disabled] [ref=e232]:
+                      - option "int8" [selected]
+                      - option "fp16"
+                  - generic [ref=e233]:
+                    - generic [ref=e234]: Attention bits
+                    - combobox "Attention bits" [disabled] [ref=e235]:
+                      - option "4"
+                      - option "5"
+                      - option "6"
+                      - option "7"
+                      - option "8" [selected]
+                  - generic [ref=e236]:
+                    - generic [ref=e237]: MLP bits
+                    - combobox "MLP bits" [disabled] [ref=e238]:
+                      - option "4"
+                      - option "5"
+                      - option "6"
+                      - option "7"
+                      - option "8" [selected]
+                  - generic [ref=e239]:
+                    - generic [ref=e240]: Late-K mode
+                    - combobox "Late-K mode" [disabled] [ref=e241]:
+                      - option "Quantized" [selected]
+                      - option "fp16"
+                  - generic [ref=e242]:
+                    - generic [ref=e243]: Muon WD
+                    - spinbutton "Muon WD" [disabled] [ref=e244]: "0"
+                  - generic [ref=e245]:
+                    - generic [ref=e246]: Adam WD
+                    - spinbutton "Adam WD" [disabled] [ref=e247]: "0"
+              - generic [ref=e248]:
+                - generic [ref=e249]: The launcher always writes a background launch request first, then the trainer populates the standard run tables.
+                - button "Launch run" [disabled] [ref=e250]
+        - generic [ref=e251]:
+          - generic [ref=e253]:
+            - generic [ref=e254]: Recent launches
+            - heading "Background run requests" [level=2] [ref=e255]
+            - paragraph [ref=e256]: Every UI launch is recorded in SQLite before the trainer starts, then linked to the tracked run once it comes online.
+          - generic [ref=e257]: No UI launch requests have been recorded yet.
+  - alert [ref=e258]

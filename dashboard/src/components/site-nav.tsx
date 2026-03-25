@@ -8,6 +8,7 @@ const links = [
   { href: "/", label: "Signals" },
   { href: "/runs", label: "Runs" },
   { href: "/groups", label: "Sweeps" },
+  { href: "/launch", label: "Launch" },
 ];
 
 export function SiteNav() {

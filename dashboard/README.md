@@ -1,6 +1,6 @@
 ## Parameter Golf Dashboard
 
-Read-only Next.js dashboard for experiment runs stored in the local SQLite tracker.
+Launch-enabled Next.js dashboard for experiment runs stored in the local SQLite tracker.
 
 ### Development
 
@@ -43,6 +43,8 @@ npm run build
   sweep/group list
 - `/groups/[group]`
   baseline-vs-variants comparison for a sweep
+- `/launch`
+  host detection, trainer selection, advanced-block configuration, and background run launch
 
 ### Ranking rule
 

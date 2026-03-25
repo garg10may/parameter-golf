@@ -24,6 +24,7 @@ import sentencepiece as spm
 import torch
 import torch.distributed as dist
 import torch.nn.functional as F
+from advanced_features import reject_advanced_env_vars
 from experiment_tracking import SQLiteExperimentTracker, collect_hyperparameters
 from torch import Tensor, nn
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -733,6 +734,7 @@ class GPT(nn.Module):
 def main() -> None:
     global zeropower_via_newtonschulz5
 
+    reject_advanced_env_vars("train_gpt.py")
     code = Path(__file__).read_text(encoding="utf-8")
     args = Hyperparameters()
     zeropower_via_newtonschulz5 = torch.compile(zeropower_via_newtonschulz5)
@@ -839,6 +841,12 @@ def main() -> None:
                 "experiment_group": os.environ.get("EXPERIMENT_GROUP"),
                 "experiment_label": os.environ.get("EXPERIMENT_LABEL"),
                 "experiment_comment": os.environ.get("EXPERIMENT_COMMENT"),
+                "launch_source": os.environ.get("LAUNCH_SOURCE"),
+                "launch_platform": os.environ.get("LAUNCH_PLATFORM"),
+                "launch_device_kind": os.environ.get("LAUNCH_DEVICE_KIND"),
+                "launch_device_count": int(os.environ["LAUNCH_DEVICE_COUNT"]) if "LAUNCH_DEVICE_COUNT" in os.environ else None,
+                "launch_resolved_script": os.environ.get("LAUNCH_RESOLVED_SCRIPT"),
+                "launch_trainer_mode": os.environ.get("LAUNCH_TRAINER_MODE"),
             }
         )
     base_bytes_lut, has_leading_space_lut, is_boundary_token_lut = build_sentencepiece_luts(

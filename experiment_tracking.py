@@ -1,16 +1,92 @@
 from __future__ import annotations
 
+import atexit
 import json
 import os
 import sqlite3
+import sys
+import traceback
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS runs (
+    run_id TEXT PRIMARY KEY,
+    script_name TEXT NOT NULL,
+    backend TEXT NOT NULL,
+    status TEXT NOT NULL,
+    started_at_utc TEXT NOT NULL,
+    finished_at_utc TEXT,
+    log_path TEXT,
+    notes TEXT
+);
+
+CREATE TABLE IF NOT EXISTS params (
+    run_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    value_type TEXT NOT NULL,
+    value_text TEXT,
+    value_real REAL,
+    value_int INTEGER,
+    PRIMARY KEY (run_id, name),
+    FOREIGN KEY (run_id) REFERENCES runs(run_id)
+);
+
+CREATE TABLE IF NOT EXISTS metrics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL,
+    phase TEXT NOT NULL,
+    step INTEGER,
+    name TEXT NOT NULL,
+    value REAL NOT NULL,
+    recorded_at_utc TEXT NOT NULL,
+    FOREIGN KEY (run_id) REFERENCES runs(run_id)
+);
+
+CREATE TABLE IF NOT EXISTS artifacts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    bytes INTEGER NOT NULL,
+    metadata_json TEXT,
+    recorded_at_utc TEXT NOT NULL,
+    FOREIGN KEY (run_id) REFERENCES runs(run_id)
+);
+
+CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL,
+    step INTEGER,
+    name TEXT NOT NULL,
+    message TEXT,
+    recorded_at_utc TEXT NOT NULL,
+    FOREIGN KEY (run_id) REFERENCES runs(run_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_metrics_run_name_step ON metrics(run_id, name, step);
+CREATE INDEX IF NOT EXISTS idx_metrics_name ON metrics(name);
+CREATE INDEX IF NOT EXISTS idx_params_name ON params(name);
+"""
+
+
+def ensure_experiment_schema(db_path: Path) -> None:
+    db_path = Path(db_path)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        conn.executescript(SCHEMA_SQL)
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def collect_hyperparameters(args: Any) -> dict[str, Any]:
@@ -37,6 +113,12 @@ class SQLiteExperimentTracker:
 
     def __post_init__(self) -> None:
         self.db_path = Path(self.db_path)
+        self.launch_id = os.environ.get("LAUNCH_ID")
+        self._finished = False
+        self._started = False
+        self._atexit_registered = False
+        self._previous_excepthook: Callable[[type[BaseException], BaseException, Any], None] | None = None
+        self._uncaught_hook: Callable[[type[BaseException], BaseException, Any], None] | None = None
         if not self.enabled:
             self.conn = None
             return
@@ -62,67 +144,64 @@ class SQLiteExperimentTracker:
 
     def _init_schema(self) -> None:
         assert self.conn is not None
-        self.conn.executescript(
+        self.conn.executescript(SCHEMA_SQL)
+        self.conn.commit()
+
+    def _launch_table_exists(self) -> bool:
+        if self.conn is None:
+            return False
+        row = self.conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS runs (
-                run_id TEXT PRIMARY KEY,
-                script_name TEXT NOT NULL,
-                backend TEXT NOT NULL,
-                status TEXT NOT NULL,
-                started_at_utc TEXT NOT NULL,
-                finished_at_utc TEXT,
-                log_path TEXT,
-                notes TEXT
-            );
-
-            CREATE TABLE IF NOT EXISTS params (
-                run_id TEXT NOT NULL,
-                name TEXT NOT NULL,
-                value_type TEXT NOT NULL,
-                value_text TEXT,
-                value_real REAL,
-                value_int INTEGER,
-                PRIMARY KEY (run_id, name),
-                FOREIGN KEY (run_id) REFERENCES runs(run_id)
-            );
-
-            CREATE TABLE IF NOT EXISTS metrics (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                run_id TEXT NOT NULL,
-                phase TEXT NOT NULL,
-                step INTEGER,
-                name TEXT NOT NULL,
-                value REAL NOT NULL,
-                recorded_at_utc TEXT NOT NULL,
-                FOREIGN KEY (run_id) REFERENCES runs(run_id)
-            );
-
-            CREATE TABLE IF NOT EXISTS artifacts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                run_id TEXT NOT NULL,
-                name TEXT NOT NULL,
-                bytes INTEGER NOT NULL,
-                metadata_json TEXT,
-                recorded_at_utc TEXT NOT NULL,
-                FOREIGN KEY (run_id) REFERENCES runs(run_id)
-            );
-
-            CREATE TABLE IF NOT EXISTS events (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                run_id TEXT NOT NULL,
-                step INTEGER,
-                name TEXT NOT NULL,
-                message TEXT,
-                recorded_at_utc TEXT NOT NULL,
-                FOREIGN KEY (run_id) REFERENCES runs(run_id)
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_metrics_run_name_step ON metrics(run_id, name, step);
-            CREATE INDEX IF NOT EXISTS idx_metrics_name ON metrics(name);
-            CREATE INDEX IF NOT EXISTS idx_params_name ON params(name);
+            SELECT 1
+            FROM sqlite_master
+            WHERE type = 'table' AND name = 'launch_requests'
             """
+        ).fetchone()
+        return row is not None
+
+    def _update_launch_request(self, *, status: str, message: str | None = None) -> None:
+        if self.conn is None or not self.launch_id or not self._launch_table_exists():
+            return
+        self.conn.execute(
+            """
+            UPDATE launch_requests
+            SET status = ?, updated_at_utc = ?, message = COALESCE(?, message)
+            WHERE launch_id = ?
+            """,
+            (status, utc_now_iso(), message, self.launch_id),
         )
         self.conn.commit()
+
+    def _mark_incomplete_exit(self) -> None:
+        if not self.enabled or self.conn is None or not self._started or self._finished:
+            return
+        try:
+            self.finish(status="failed", notes="Process exited without calling finish()")
+        except Exception:
+            pass
+
+    def _register_exit_handlers(self) -> None:
+        if not self._atexit_registered:
+            atexit.register(self._mark_incomplete_exit)
+            self._atexit_registered = True
+        if self._uncaught_hook is not None:
+            return
+        self._previous_excepthook = sys.excepthook
+
+        def hook(exc_type: type[BaseException], exc: BaseException, tb: Any) -> None:
+            try:
+                if not self._finished:
+                    self.finish(
+                        status="failed",
+                        notes="".join(traceback.format_exception_only(exc_type, exc)).strip(),
+                    )
+            except Exception:
+                pass
+            if self._previous_excepthook is not None:
+                self._previous_excepthook(exc_type, exc, tb)
+
+        self._uncaught_hook = hook
+        sys.excepthook = hook
 
     def start_run(self, *, notes: str | None = None) -> None:
         if not self.enabled:
@@ -136,6 +215,9 @@ class SQLiteExperimentTracker:
             (self.run_id, self.script_name, self.backend, "running", utc_now_iso(), self.log_path, notes),
         )
         self.conn.commit()
+        self._started = True
+        self._register_exit_handlers()
+        self._update_launch_request(status="running", message=f"Trainer started: {self.script_name}")
 
     def _param_row(self, value: Any) -> tuple[str, str | None, float | None, int | None]:
         if isinstance(value, bool):
@@ -223,8 +305,14 @@ class SQLiteExperimentTracker:
             (status, utc_now_iso(), notes, self.run_id),
         )
         self.conn.commit()
+        self._finished = True
+        launch_message = notes if notes else f"Trainer {status}: {self.script_name}"
+        self._update_launch_request(status=status, message=launch_message)
 
     def close(self) -> None:
+        if self._uncaught_hook is not None and sys.excepthook is self._uncaught_hook:
+            sys.excepthook = self._previous_excepthook or sys.__excepthook__
+            self._uncaught_hook = None
         if self.conn is not None:
             self.conn.close()
             self.conn = None

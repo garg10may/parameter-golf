@@ -1,0 +1,41 @@
+{
+  "group": "advanced_cuda_quant_export",
+  "command": "./scripts/run_cuda_full_eval.sh",
+  "defaults": {
+    "TRAIN_SCRIPT": "train_gpt_advanced.py",
+    "ITERATIONS": 120,
+    "TRAIN_BATCH_TOKENS": 131072,
+    "VAL_LOSS_EVERY": 0,
+    "VAL_BATCH_SIZE": 262144,
+    "WARMUP_STEPS": 5
+  },
+  "experiments": [
+    {
+      "label": "int8_zlib",
+      "comment": "Baseline quantized export profile."
+    },
+    {
+      "label": "qat6_int6_attn_mlp",
+      "comment": "Enable QAT and export both attention and MLP weights at int6.",
+      "env": {
+        "QAT_ENABLED": 1,
+        "QAT_BITS": 6,
+        "EXPORT_ATTN_WEIGHT_BITS": 6,
+        "EXPORT_MLP_WEIGHT_BITS": 6
+      }
+    },
+    {
+      "label": "mixed_6_5_fp16_zstd",
+      "comment": "Mixed export profile with fp16 tied embedding and zstd compression.",
+      "env": {
+        "QAT_ENABLED": 1,
+        "QAT_BITS": 6,
+        "EXPORT_CODEC": "zstd",
+        "EXPORT_TIED_EMBED_MODE": "fp16",
+        "EXPORT_ATTN_WEIGHT_BITS": 6,
+        "EXPORT_MLP_WEIGHT_BITS": 5,
+        "EXPORT_LATE_K_MODE": "fp16"
+      }
+    }
+  ]
+}

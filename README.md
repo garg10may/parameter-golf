@@ -128,6 +128,35 @@ All four scripts accept env-var overrides, for example:
 RUN_ID=my_try ITERATIONS=200 ./scripts/run_cuda_short_compare.sh
 ```
 
+The CUDA helper scripts also accept `TRAIN_SCRIPT`, so you can target the advanced framework without changing the sweep runner:
+
+```bash
+RUN_ID=advanced_smoke \
+TRAIN_SCRIPT=train_gpt_advanced.py \
+EVAL_MODE=sliding \
+EVAL_STRIDE=64 \
+./scripts/run_cuda_short_compare.sh
+```
+
+### Advanced CUDA Experiment Framework
+
+For experiment-heavy CUDA work, use `train_gpt_advanced.py`. It keeps the simple baseline path untouched while exposing recurring feature families as env vars:
+
+- input plugins: `USE_SMEARGATE`, `USE_BIGRAM_HASH`, `BIGRAM_VOCAB_SIZE`, `BIGRAM_DIM`
+- eval mode: `EVAL_MODE`, `EVAL_STRIDE`, `EVAL_BATCH_SEQS`
+- train modifiers: `INIT_MODE`, `QAT_ENABLED`, `QAT_BITS`, `SWA_ENABLED`, `SWA_START_FRAC`, `SWA_EVERY`
+- export policy: `EXPORT_CODEC`, `EXPORT_CODEC_LEVEL`, `EXPORT_TIED_EMBED_MODE`, `EXPORT_ATTN_WEIGHT_BITS`, `EXPORT_MLP_WEIGHT_BITS`, `EXPORT_LATE_K_MODE`
+
+Advanced runs log the raw knobs plus derived feature tags:
+
+- `feature_eval_mode`
+- `feature_input_stack`
+- `feature_train_stack`
+- `feature_export_stack`
+- `feature_quant_profile`
+
+The simple `train_gpt.py` and `train_gpt_mlx.py` entrypoints now reject these advanced-only env vars with a clear error so misrouted sweeps fail fast.
+
 ### Experiment Tracking
 
 Runs now write structured experiment data to SQLite by default:

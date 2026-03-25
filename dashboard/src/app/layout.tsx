@@ -18,7 +18,7 @@ const mono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: "Parameter Golf Dashboard",
-  description: "Read-only experiment intelligence for SQLite-tracked parameter golf runs.",
+  description: "Experiment intelligence and launch control for SQLite-tracked parameter golf runs.",
 };
 
 export default function RootLayout({
@@ -63,7 +63,7 @@ export default function RootLayout({
                 <div className="flex items-center gap-3">
                   <AutoRefreshToggle intervalMs={Number.isFinite(refreshMs) ? refreshMs : 10000} />
                   <div className="rounded-full border border-stone-300 bg-white/90 px-3 py-1.5 font-mono text-[11px] text-stone-500">
-                    read-only
+                    launch-enabled
                   </div>
                 </div>
               </header>

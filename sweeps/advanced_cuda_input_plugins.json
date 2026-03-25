@@ -1,0 +1,44 @@
+{
+  "group": "advanced_cuda_input_plugins",
+  "command": "./scripts/run_cuda_short_compare.sh",
+  "defaults": {
+    "TRAIN_SCRIPT": "train_gpt_advanced.py",
+    "ITERATIONS": 200,
+    "TRAIN_BATCH_TOKENS": 262144,
+    "VAL_LOSS_EVERY": 100,
+    "VAL_BATCH_SIZE": 524288,
+    "WARMUP_STEPS": 10
+  },
+  "experiments": [
+    {
+      "label": "baseline",
+      "comment": "Reference advanced run with no input augmentation."
+    },
+    {
+      "label": "smeargate",
+      "comment": "Enable the lightweight embedding blend gate only.",
+      "env": {
+        "USE_SMEARGATE": 1
+      }
+    },
+    {
+      "label": "bigram_hash",
+      "comment": "Enable hashed bigram embeddings only.",
+      "env": {
+        "USE_BIGRAM_HASH": 1,
+        "BIGRAM_VOCAB_SIZE": 4096,
+        "BIGRAM_DIM": 128
+      }
+    },
+    {
+      "label": "smeargate_plus_bigram",
+      "comment": "Stack both input plugins.",
+      "env": {
+        "USE_SMEARGATE": 1,
+        "USE_BIGRAM_HASH": 1,
+        "BIGRAM_VOCAB_SIZE": 4096,
+        "BIGRAM_DIM": 128
+      }
+    }
+  ]
+}

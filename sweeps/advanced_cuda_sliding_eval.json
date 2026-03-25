@@ -1,0 +1,36 @@
+{
+  "group": "advanced_cuda_sliding_eval",
+  "command": "./scripts/run_cuda_short_compare.sh",
+  "defaults": {
+    "TRAIN_SCRIPT": "train_gpt_advanced.py",
+    "ITERATIONS": 200,
+    "TRAIN_BATCH_TOKENS": 262144,
+    "VAL_LOSS_EVERY": 100,
+    "VAL_BATCH_SIZE": 524288,
+    "WARMUP_STEPS": 10
+  },
+  "experiments": [
+    {
+      "label": "baseline_standard",
+      "comment": "Advanced trainer with all advanced features disabled. Use this as the parity reference."
+    },
+    {
+      "label": "sliding_stride_64",
+      "comment": "Sliding-window evaluation at stride 64.",
+      "env": {
+        "EVAL_MODE": "sliding",
+        "EVAL_STRIDE": 64,
+        "EVAL_BATCH_SEQS": 8
+      }
+    },
+    {
+      "label": "sliding_stride_128",
+      "comment": "Sliding-window evaluation at stride 128 for a cheaper overlap tradeoff.",
+      "env": {
+        "EVAL_MODE": "sliding",
+        "EVAL_STRIDE": 128,
+        "EVAL_BATCH_SEQS": 8
+      }
+    }
+  ]
+}
