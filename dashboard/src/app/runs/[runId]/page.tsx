@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MetricBadge, ProxyBadge } from "@/components/badges";
 import { LearningCurvesChart } from "@/components/charts";
+import { RunLogPanel } from "@/components/run-log-panel";
 import { SectionFrame, StatTile } from "@/components/section-frame";
 import { formatBytes, formatCompactNumber, formatDuration, formatModelFootprint, formatNumber, formatRelativeDate, toTitleCase } from "@/lib/format";
 import { getRunDetail } from "@/lib/queries";
@@ -125,6 +126,14 @@ export default async function RunDetailPage({
           )}
         </SectionFrame>
       </div>
+
+      <SectionFrame
+        eyebrow="Live logs"
+        title="Runtime output"
+        subtitle="Tail the background process output live from the dashboard. Console log matches the spawned process stream when available."
+      >
+        <RunLogPanel runId={detail.summary.runId} initialStatus={detail.summary.status} />
+      </SectionFrame>
 
       <SectionFrame eyebrow="Parameters" title="Recorded hyperparameters" subtitle="Everything stored in SQLite for this run, sorted alphabetically.">
         <div className="overflow-hidden rounded-[24px] border border-stone-200">

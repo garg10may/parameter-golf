@@ -1,5 +1,6 @@
 import "server-only";
 
+import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import type { TrainingLaunchResult, TrainingSystemInfo } from "@/lib/types";
@@ -8,12 +9,27 @@ function getRepoRoot() {
   return path.resolve(/* turbopackIgnore: true */ process.cwd(), "..");
 }
 
+function resolveTrainingPythonExecutable() {
+  const configured = process.env.TRAINING_PYTHON_EXECUTABLE?.trim();
+  if (configured) {
+    return configured;
+  }
+
+  const venvPython = path.join(getRepoRoot(), ".venv", "bin", "python");
+  if (!fs.existsSync(venvPython)) {
+    throw new Error(
+      `Dashboard training requires ${venvPython}. Create the repo virtualenv first, for example: python3 -m venv .venv`,
+    );
+  }
+  return venvPython;
+}
+
 function getLauncherScriptPath() {
   return path.join(getRepoRoot(), "scripts", "training_entrypoint.py");
 }
 
 function runLauncher(command: "system-info" | "launch", payload?: unknown) {
-  const pythonExecutable = process.env.TRAINING_PYTHON_EXECUTABLE ?? "python3";
+  const pythonExecutable = resolveTrainingPythonExecutable();
   const result = spawnSync(pythonExecutable, [getLauncherScriptPath(), command], {
     cwd: getRepoRoot(),
     input: payload == null ? undefined : JSON.stringify(payload),

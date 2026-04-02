@@ -361,6 +361,9 @@ export function TrainingLauncher({
               <div className="mt-1 break-words text-sm text-stone-600">
                 {systemInfo?.launchMessage ?? systemError ?? "The launcher could not inspect this host yet."}
               </div>
+              <div className="mt-2 text-xs text-stone-500">
+                The dashboard launches training with the repo virtualenv at <span className="font-mono">.venv/bin/python</span>.
+              </div>
             </div>
             <button
               type="button"
@@ -415,7 +418,7 @@ export function TrainingLauncher({
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">Launcher contract</div>
             <div className="mt-1 break-words text-sm leading-6 text-stone-700">
-              The UI writes a launch request, the Python entrypoint resolves the right trainer for this machine, and the run appears in the normal SQLite-backed views as soon as tracking starts.
+              The UI writes a launch request, the `.venv` Python entrypoint resolves the right trainer for this machine, and the run appears in the normal SQLite-backed views as soon as tracking starts.
             </div>
           </div>
           {advancedMode && !advancedSupported ? (
@@ -435,7 +438,7 @@ export function TrainingLauncher({
               <div className="mt-1 font-mono text-[12px]">launch_id={launchResult.launchId}</div>
               <div className="mt-2 flex flex-wrap gap-3">
                 <Link href={`/runs/${encodeURIComponent(launchResult.runId)}`} className="underline decoration-emerald-300 underline-offset-4">
-                  Open run
+                  Open run and tail logs
                 </Link>
                 <span className="font-mono text-[12px]">{launchResult.resolvedScriptName}</span>
               </div>
